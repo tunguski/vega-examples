@@ -1,0 +1,6 @@
+# Compiled output (run ./build.sh to regenerate)
+build/
+
+# elm-lang / elm tooling caches
+elm-stuff/
+*.js
