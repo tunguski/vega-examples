@@ -7,68 +7,20 @@
     <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+    <!-- The reusable editor shell's chrome (file pane, code editing, Elm highlighting, resizable panes). -->
+    <link rel="stylesheet" href="editor.css" />
     <style>
-      :root { --bg:#1e1e2e; --panel:#252537; --ink:#e6e6f0; --muted:#9a9ab0; --accent:#7c5cff; --line:#34344a; }
-      * { box-sizing: border-box; }
+      /* The Vega editor's bits, layered on top of the editor shell (.ed-* / seg-* classes). */
       html, body { margin: 0; height: 100%; }
-      body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--ink); }
-      #app, .app { height: 100%; }
-      .app { display: flex; flex-direction: column; }
-      .header { display: flex; align-items: center; gap: 1rem; padding: .6rem 1rem; border-bottom: 1px solid var(--line); }
-      .header h1 { font-size: 1.05rem; margin: 0; }
-      .tagline { color: var(--muted); font-size: .85rem; flex: 1; }
-      button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: .35rem .7rem; cursor: pointer; }
-      button:hover { border-color: var(--accent); }
-      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-      .body { flex: 1; display: grid; grid-template-columns: 180px 1fr 1fr; min-height: 0; }
-      .sidebar { border-right: 1px solid var(--line); padding: .6rem; overflow: auto; }
-      .label { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; margin: .2rem 0 .5rem; }
-      .examples { display: flex; flex-direction: column; gap: .3rem; }
-      .example { text-align: left; }
-      .example.active { border-color: var(--accent); color: #fff; }
-      .editor { display: flex; flex-direction: column; border-right: 1px solid var(--line); min-height: 0; }
-      /* CodeEditor (ce-*): a transparent textarea layered over a highlighted <pre> + a line gutter. */
-      .ce-editor { flex: 1; min-height: 0; overflow: auto; background: #15151f; }
-      .ce-flex { display: flex; min-height: 100%; }
-      .ce-gutter { user-select: none; text-align: right; padding: 14px 8px 14px 12px; background: #12121b;
-                   color: #56566e; font-family: ui-monospace, monospace; font-size: 13px; line-height: 1.5; white-space: pre; }
-      .ce-gutter-line.current { background: #2a2a40; color: var(--ink); }
-      .ce-area { position: relative; flex: 1; min-width: 0; }
-      /* The <pre> and <textarea> MUST share these exactly to stay aligned. */
-      .ce-code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; line-height: 1.5;
-                 padding: 14px; box-sizing: border-box; white-space: pre-wrap; word-break: break-word; width: 100%;
-                 min-height: 100%; tab-size: 2; }
-      .ce-pre { margin: 0; pointer-events: none; color: #d7d7ea; }
-      .ce-textarea { position: absolute; top: 0; left: 0; height: 100%; color: transparent; background: transparent;
-                     caret-color: var(--accent); border: none; outline: none; resize: none; overflow: hidden; }
-      .ce-seg { color: #d7d7ea; }
-      .ce-seg-kw { color: #c792ea; }
-      .ce-seg-type { color: #82aaff; }
-      .ce-seg-num { color: #f78c6c; }
-      .ce-seg-str { color: #c3e88d; }
-      .ce-seg-com { color: #637084; }
-      .ce-seg-op { color: #89ddff; }
-      .status { padding: .4rem 1rem; font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line); }
-      .status.ok { color: #5fd07a; }
-      .error { padding: .6rem 1rem; font-family: ui-monospace, monospace; font-size: .8rem; color: #ff8a8a;
-               background: #2a1f2a; border-top: 1px solid var(--line); white-space: pre-wrap; max-height: 9rem; overflow: auto; }
-      .preview { padding: 1.2rem; overflow: auto; background: #fff; }
+      #app { height: 100%; }
+
+      /* This is a standalone app, not inside the gallery, so hide the shell's "back to elm-lang" link. */
+      .ed-back { display: none; }
+
+      /* The Vega preview pane: a white, scrollable chart surface filling the result column. */
+      #vega-preview { height: 100%; min-height: 0; background: #fff; border-radius: 8px; padding: 16px; overflow: auto; }
+      #vis { width: 100%; }
       .vega-err { color: #b00; white-space: pre-wrap; font-family: ui-monospace, monospace; }
-      .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; }
-      .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1.2rem; width: 460px; max-width: 92vw; max-height: 90vh; overflow: auto; }
-      .modal h1 { font-size: 1.1rem; margin: 0 0 .8rem; }
-      .field { margin-bottom: .7rem; }
-      .field-label { font-size: .78rem; color: var(--muted); margin-bottom: .25rem; }
-      .field select, .csv, .text-input { width: 100%; background: #15151f; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .35rem; font: inherit; }
-      .field-error { color: #ff8a8a; font-size: .8rem; margin: -.4rem 0 .6rem; }
-      button[disabled] { opacity: .45; cursor: not-allowed; }
-      button[disabled]:hover { border-color: var(--line); }
-      .workspace-label { margin-top: 1rem; }
-      .empty { color: var(--muted); font-size: .78rem; padding: .2rem .1rem; }
-      .csv { font-family: ui-monospace, monospace; font-size: 12px; }
-      .twin { display: flex; gap: .5rem; }
-      .twin > * { flex: 1; }
-      .modal-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }
     </style>
   </head>
   <body>
@@ -77,15 +29,23 @@
     <script>
       // The compiled app exposes its ports on window.$app (the elm-lang JS backend). On each spec it
       // emits, render it with vega-embed into the #vis element the app created (kept stable by lazy).
-      window.$app.ports.renderSpec.subscribe(function (json) {
-        var el = document.getElementById("vis");
-        if (!el || !json) return;
-        var spec;
-        try { spec = JSON.parse(json); } catch (e) { return; }
-        vegaEmbed(el, spec, { actions: true, renderer: "svg" }).catch(function (e) {
-          el.innerHTML = '<pre class="vega-err">' + String(e) + "</pre>";
+      // The shell may mount a tick after this script runs, so poll briefly until the port exists; any
+      // spec emitted before we subscribe is buffered by the runtime and flushed on subscribe.
+      (function wire() {
+        if (!window.$app || !window.$app.ports || !window.$app.ports.renderSpec) {
+          setTimeout(wire, 30);
+          return;
+        }
+        window.$app.ports.renderSpec.subscribe(function (json) {
+          var el = document.getElementById("vis");
+          if (!el || !json) return;
+          var spec;
+          try { spec = JSON.parse(json); } catch (e) { return; }
+          vegaEmbed(el, spec, { actions: true, renderer: "svg" }).catch(function (e) {
+            el.innerHTML = '<pre class="vega-err">' + String(e) + "</pre>";
+          });
         });
-      });
+      })();
     </script>
   </body>
 </html>
