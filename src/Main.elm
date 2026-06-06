@@ -1,0 +1,289 @@
+port module Main exposing (main)
+
+{-| A dynamic, in-browser editor for Vega-Lite charts written in Elm.
+
+The left pane is an Elm program written against the `VegaLite` module. It is evaluated **live in
+the browser** by the elm-lang in-browser interpreter (the same engine as the elm-editor project):
+`Eval.mainValue` runs the program's `main` to a `Spec` value and `EvalJson.jsonEncode` serialises
+it to a Vega-Lite JSON spec, which is sent out the `renderSpec` port and drawn by vega-embed.
+
+No server, no recompilation: editing the code re-interprets it on every keystroke.
+-}
+
+import Browser
+import EvalJson
+import Eval
+import Examples exposing (Example)
+import Html exposing (Html, button, div, h1, option, select, span, text, textarea)
+import Html.Attributes exposing (class, classList, id, rows, selected, value)
+import Html.Events exposing (on, onClick, onInput)
+import Html.Lazy exposing (lazy)
+import Http
+import Json.Decode as Decode
+import Wizard
+
+
+{-| Outgoing: a Vega-Lite JSON spec to render (empty string clears the view). -}
+port renderSpec : String -> Cmd msg
+
+
+main : Program () Model Msg
+main =
+    Browser.element
+        { init = init
+        , update = update
+        , view = view
+        , subscriptions = \_ -> Sub.none
+        }
+
+
+
+-- MODEL
+
+
+type alias Model =
+    { code : String
+    , lib : Maybe String -- the VegaLite.elm source, fetched at startup (fed to the interpreter)
+    , error : Maybe String
+    , selected : String
+    , wizard : Maybe Wizard.Form
+    }
+
+
+init : () -> ( Model, Cmd Msg )
+init _ =
+    ( { code = Examples.starter
+      , lib = Nothing
+      , error = Nothing
+      , selected = "Bar chart"
+      , wizard = Nothing
+      }
+    , Http.get { url = "VegaLite.elm", expect = Http.expectString LibLoaded }
+    )
+
+
+
+-- UPDATE
+
+
+type Msg
+    = CodeChanged String
+    | LibLoaded (Result Http.Error String)
+    | PickExample Example
+    | OpenWizard
+    | CloseWizard
+    | SetWizard Wizard.Form
+    | CreateFromWizard
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    case msg of
+        CodeChanged code ->
+            compile { model | code = code }
+
+        LibLoaded (Ok lib) ->
+            compile { model | lib = Just lib }
+
+        LibLoaded (Err _) ->
+            ( { model | error = Just "Could not load VegaLite.elm (serve the project over HTTP)." }
+            , Cmd.none
+            )
+
+        PickExample ex ->
+            compile { model | code = ex.code, selected = ex.name }
+
+        OpenWizard ->
+            ( { model | wizard = Just Wizard.default }, Cmd.none )
+
+        CloseWizard ->
+            ( { model | wizard = Nothing }, Cmd.none )
+
+        SetWizard form ->
+            ( { model | wizard = Just form }, Cmd.none )
+
+        CreateFromWizard ->
+            case model.wizard of
+                Just form ->
+                    compile { model | code = Wizard.generate form, wizard = Nothing, selected = "" }
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        NoOp ->
+            ( model, Cmd.none )
+
+
+{-| Interpret the current program against the VegaLite library and render (or record the error). -}
+compile : Model -> ( Model, Cmd Msg )
+compile model =
+    case model.lib of
+        Nothing ->
+            ( model, Cmd.none )
+
+        Just lib ->
+            case Eval.mainValue [ ( "VegaLite.elm", lib ), ( "Main.elm", model.code ) ] of
+                Ok spec ->
+                    ( { model | error = Nothing }, renderSpec (EvalJson.jsonEncode spec) )
+
+                Err e ->
+                    ( { model | error = Just e }, Cmd.none )
+
+
+
+-- VIEW
+
+
+view : Model -> Html Msg
+view model =
+    div [ class "app" ]
+        [ viewHeader
+        , div [ class "body" ]
+            [ viewSidebar model
+            , viewEditor model
+            , lazy viewPreview 0
+            ]
+        , case model.wizard of
+            Just form ->
+                viewWizard form
+
+            Nothing ->
+                text ""
+        ]
+
+
+viewHeader : Html Msg
+viewHeader =
+    div [ class "header" ]
+        [ h1 [] [ text "Elm · Vega-Lite editor" ]
+        , span [ class "tagline" ] [ text "write Elm, see a chart — interpreted live in your browser" ]
+        , button [ class "primary", onClick OpenWizard ] [ text "+ New chart" ]
+        ]
+
+
+viewSidebar : Model -> Html Msg
+viewSidebar model =
+    div [ class "sidebar" ]
+        [ div [ class "label" ] [ text "Examples" ]
+        , div [ class "examples" ]
+            (List.map (exampleButton model.selected) Examples.all)
+        ]
+
+
+exampleButton : String -> Example -> Html Msg
+exampleButton selected ex =
+    button
+        [ classList [ ( "example", True ), ( "active", ex.name == selected ) ]
+        , onClick (PickExample ex)
+        ]
+        [ text ex.name ]
+
+
+viewEditor : Model -> Html Msg
+viewEditor model =
+    div [ class "editor" ]
+        [ textarea
+            [ class "code"
+            , value model.code
+            , onInput CodeChanged
+            ]
+            []
+        , case model.error of
+            Just e ->
+                div [ class "error" ] [ text e ]
+
+            Nothing ->
+                case model.lib of
+                    Nothing ->
+                        div [ class "status" ] [ text "Loading the VegaLite library…" ]
+
+                    Just _ ->
+                        div [ class "status ok" ] [ text "✓ rendered" ]
+        ]
+
+
+{-| Lazy + a constant argument so Elm reuses this node and never re-diffs its children — the
+vega-embed DOM injected into `#vis` survives the app's re-renders. -}
+viewPreview : Int -> Html Msg
+viewPreview _ =
+    div [ class "preview" ]
+        [ div [ id "vis" ] [] ]
+
+
+
+-- WIZARD VIEW
+
+
+viewWizard : Wizard.Form -> Html Msg
+viewWizard form =
+    div [ class "modal-backdrop" ]
+        [ div [ class "modal" ]
+            [ h1 [] [ text "New chart" ]
+            , field "Chart type"
+                (selectInput Wizard.markChoices form.mark (\v -> SetWizard { form | mark = v }))
+            , field "Data (CSV)"
+                (textarea
+                    [ class "csv", rows 6, value form.csv, onInput (\v -> SetWizard { form | csv = v }) ]
+                    []
+                )
+            , let
+                cols =
+                    Wizard.headers form.csv
+              in
+              div []
+                [ field "X axis"
+                    (twin
+                        (selectInput cols form.xField (\v -> SetWizard { form | xField = v }))
+                        (selectInput Wizard.typeChoices form.xType (\v -> SetWizard { form | xType = v }))
+                    )
+                , field "Y axis"
+                    (twin
+                        (selectInput cols form.yField (\v -> SetWizard { form | yField = v }))
+                        (selectInput Wizard.typeChoices form.yType (\v -> SetWizard { form | yType = v }))
+                    )
+                , field "Colour by"
+                    (selectInput ("" :: cols) form.color (\v -> SetWizard { form | color = v }))
+                ]
+            , div [ class "modal-actions" ]
+                [ button [ onClick CloseWizard ] [ text "Cancel" ]
+                , button [ class "primary", onClick CreateFromWizard ] [ text "Create" ]
+                ]
+            ]
+        ]
+
+
+field : String -> Html Msg -> Html Msg
+field labelText control =
+    div [ class "field" ]
+        [ div [ class "field-label" ] [ text labelText ]
+        , control
+        ]
+
+
+twin : Html Msg -> Html Msg -> Html Msg
+twin a b =
+    div [ class "twin" ] [ a, b ]
+
+
+selectInput : List String -> String -> (String -> Msg) -> Html Msg
+selectInput choices current toMsg =
+    select [ onChange toMsg ]
+        (List.map
+            (\c ->
+                option [ value c, selected (c == current) ]
+                    [ text
+                        (if c == "" then
+                            "(none)"
+
+                         else
+                            c
+                        )
+                    ]
+            )
+            choices
+        )
+
+
+onChange : (String -> Msg) -> Html.Attribute Msg
+onChange toMsg =
+    on "change" (Decode.map toMsg (Decode.at [ "target", "value" ] Decode.string))

@@ -1,83 +1,40 @@
 #!/usr/bin/env bash
 #
-# Build every example in src/ into a self-contained HTML page under build/.
+# build.sh — build the Elm · Vega-Lite editor.
 #
-# Each src/<Name>.elm is a `port module` that builds a Vega spec with elm-vega and
-# sends it out the `elmToJS` port. We compile it to JavaScript with the elm-lang CLI
-# (`elm make --project`), then wrap it in an HTML page that loads the Vega runtime
-# from a CDN and renders the spec with vega-embed.
+# The app reuses the elm-lang in-browser interpreter (the elm-editor project). Since Elm has no
+# cross-project imports, we copy the interpreter modules we need into vendor/ (a source-directory
+# listed in elm.json) before compiling. Set EDITOR to the elm-editor checkout (default ../elm-editor)
+# and ELM to the elm-lang CLI (default `elm`).
 #
-# The compiler is the elm-lang implementation in this monorepo. Point $ELM at it, e.g.
-#   ELM="java -jar /path/to/elm.jar" ./build.sh
-#   ELM=/path/to/elm-lang/elm.sh    ./build.sh
-# It defaults to `elm` on your PATH.
+#   ELM=../../elm.sh ./build.sh
 #
 set -euo pipefail
 cd "$(dirname "$0")"
 
 ELM="${ELM:-elm}"
+EDITOR="${EDITOR:-../elm-editor}"
 OUT="build"
-mkdir -p "$OUT"
 
-echo "Building elm-vega examples with: $ELM"
-
-shopt -s nullglob
-for f in src/*.elm; do
-  name="$(basename "$f" .elm)"
-  echo "  • $name"
-  $ELM make "$f" --project=elm.json -o "$OUT/$name.js" >/dev/null
-
-  cat > "$OUT/$name.html" <<HTML
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>$name — elm-vega</title>
-    <!-- Vega runtime + embed helper (Vega 5, matching the spec schema elm-vega emits) -->
-    <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
-    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
-    <style>
-      body { font-family: system-ui, sans-serif; margin: 2rem; }
-      a { color: #4682b4; }
-    </style>
-    <!-- The Elm-compiled program (a headless Platform.worker that emits the spec) -->
-    <script src="$name.js"></script>
-  </head>
-  <body>
-    <p><a href="index.html">← gallery</a></p>
-    <h1>$name</h1>
-    <div id="vis"></div>
-    <!-- The compiled bundle hosts a worker; it pushes the spec(s) out the elmToJS port. -->
-    <div id="app" style="display: none"></div>
-    <script>
-      window.\$app.ports.elmToJS.subscribe(function (namedSpecs) {
-        var host = document.getElementById("vis");
-        Object.keys(namedSpecs).forEach(function (name) {
-          var el = document.createElement("div");
-          host.appendChild(el);
-          vegaEmbed(el, namedSpecs[name], { actions: true }).catch(console.warn);
-        });
-      });
-    </script>
-  </body>
-</html>
-HTML
+# 1) Vendor the interpreter modules from elm-editor (only the engine — not its UI/Main).
+mkdir -p vendor
+for m in Lang Lexer Parser EvalJson EvalPlayground EvalRender Eval Highlight; do
+  if [ ! -f "$EDITOR/src/$m.elm" ]; then
+    echo "build.sh: missing $EDITOR/src/$m.elm — set EDITOR to the elm-editor checkout" >&2
+    exit 1
+  fi
+  cp "$EDITOR/src/$m.elm" "vendor/$m.elm"
 done
 
-# Gallery index linking every example.
-{
-  echo '<!DOCTYPE html>'
-  echo '<html lang="en"><head><meta charset="utf-8"/><title>elm-vega examples</title>'
-  echo '<style>body{font-family:system-ui,sans-serif;margin:2rem;max-width:42rem}li{margin:.3rem 0}</style>'
-  echo '</head><body>'
-  echo '<h1>elm-vega examples</h1>'
-  echo '<p>Ten visualizations built with <code>gicentre/elm-vega</code>, compiled by the elm-lang CLI.</p>'
-  echo '<ul>'
-  for f in src/*.elm; do
-    name="$(basename "$f" .elm)"
-    echo "  <li><a href=\"$name.html\">$name</a></li>"
-  done
-  echo '</ul></body></html>'
-} > "$OUT/index.html"
+# 2) Compile the app (the editor interpreter doesn't pass our strict type checker, so --no-check).
+mkdir -p "$OUT"
+echo "Compiling the editor app with: $ELM"
+$ELM make src/Main.elm --project=elm.json -o "$OUT/app.js" --no-check >/dev/null
 
-echo "Done. Open $OUT/index.html"
+# 3) The VegaLite library source is fetched by the app at runtime and fed to the interpreter.
+cp src/VegaLite.elm "$OUT/VegaLite.elm"
+
+# 4) The host page (CDN vega + vega-embed, the compiled app, and the port wiring).
+cp index.template.html "$OUT/index.html"
+
+echo "Done. Serve with:  npx --yes serve $OUT   (then open the printed URL)"

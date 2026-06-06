@@ -1,83 +1,86 @@
-# elm-vega examples
+# vega-examples — a live, in-browser Vega-Lite editor written in Elm
 
-Ten self-contained data visualizations built with
-[`gicentre/elm-vega`](https://package.elm-lang.org/packages/gicentre/elm-vega/latest/)
-and compiled with the [elm-lang](https://github.com/tunguski/elm-lang) implementation
-of Elm (a from-scratch Elm compiler/interpreter in Java).
+A dynamic editor for [Vega-Lite](https://vega.github.io/vega-lite/) charts. You write **Elm** in the
+left pane (against a compact `VegaLite` module); it is **interpreted live in your browser** and the
+resulting Vega-Lite spec is drawn on the right by [vega-embed](https://github.com/vega/vega-embed).
+No server, no recompilation — every keystroke re-renders the chart.
 
-Each module is a headless `Platform.worker` that builds a [Vega](https://vega.github.io/vega/)
-specification declaratively in Elm and sends it out the `elmToJS` port as JSON. An HTML
-page loads the Vega runtime and renders the spec with
-[vega-embed](https://github.com/vega/vega-embed).
+It is built on the [elm-lang](https://github.com/tunguski/elm-lang) ecosystem:
 
-## The examples
+- The live evaluator is the **elm-editor** in-browser Elm interpreter
+  ([github.com/tunguski/elm-editor](https://github.com/tunguski/elm-editor)) — `Eval.mainValue` runs
+  the program's `main` to a `Spec` value and `EvalJson.jsonEncode` serialises it to Vega-Lite JSON.
+- The whole app is itself an Elm `Browser.element` program, compiled to JavaScript by the elm-lang
+  compiler.
 
-| Module | Chart |
-|---|---|
-| [`BarChart`](src/BarChart.elm) | Vertical bar chart with a hover highlight |
-| [`HorizontalBarChart`](src/HorizontalBarChart.elm) | Horizontal bars with value labels |
-| [`StackedBarChart`](src/StackedBarChart.elm) | Stacked bars (Vega `stack` transform) |
-| [`GroupedBarChart`](src/GroupedBarChart.elm) | Clustered bars (faceted nested groups) |
-| [`LineChart`](src/LineChart.elm) | Multi-series line chart (faceting) |
-| [`AreaChart`](src/AreaChart.elm) | Filled area chart |
-| [`ScatterPlot`](src/ScatterPlot.elm) | Scatterplot with size-encoded points |
-| [`PieChart`](src/PieChart.elm) | Pie chart (Vega `pie` transform + `arc`) |
-| [`DonutChart`](src/DonutChart.elm) | Donut chart (arc with inner radius) |
-| [`Heatmap`](src/Heatmap.elm) | Grid heatmap with a sequential colour scale |
+## Features
 
-All examples use **inline data**, so they render offline with no data fetches.
+- **Live editing** — write Elm using the `VegaLite` API; the chart updates as you type.
+- **Examples** — a sidebar of ready-made charts: bar, grouped bar, line, area, scatter, bubble, pie,
+  donut and histogram.
+- **New-chart wizard** — pick a chart type, paste a small CSV dataset, map columns to the x / y /
+  colour channels, and it generates an editable Elm program for you.
 
-## Building
+## The `VegaLite` module
 
-You need the elm-lang CLI (this repo's sibling Elm implementation). Point `ELM` at it
-and run the build script — it compiles every `src/*.elm` to `build/<Name>.js` and writes
-an HTML page per example plus a `build/index.html` gallery.
+[`src/VegaLite.elm`](src/VegaLite.elm) is a compact, editor-interpretable subset of the Vega-Lite
+grammar (in the spirit of [gicentre/elm-vegalite](https://package.elm-lang.org/packages/gicentre/elm-vegalite/latest/)),
+built entirely on the `Json.Encode` operations the interpreter supports. A chart is just:
+
+```elm
+import VegaLite exposing (..)
+
+main : Spec
+main =
+    toVegaLite
+        [ title "Monthly sales"
+        , dataFromColumns
+            [ ( "month", strings [ "Jan", "Feb", "Mar", "Apr", "May" ] )
+            , ( "sales", numbers [ 28, 55, 43, 91, 81 ] )
+            ]
+        , mark bar []
+        , encoding
+            [ pX "month" [ nominal ]
+            , pY "sales" [ quantitative ]
+            ]
+        ]
+```
+
+## Build & run
+
+You need the [elm-lang](https://github.com/tunguski/elm-lang) CLI and a checkout of
+[elm-editor](https://github.com/tunguski/elm-editor) next to this project (the build copies the
+interpreter modules from it, since Elm has no cross-project imports).
 
 ```sh
-# Unix / Git Bash
-ELM=/path/to/elm-lang/elm.sh ./build.sh
-# or
-ELM="java -jar /path/to/elm.jar" ./build.sh
+# from this directory; ELM points at the elm-lang CLI, EDITOR at the elm-editor checkout
+ELM=../../elm.sh EDITOR=../elm-editor ./build.sh
+npx --yes serve build      # then open the printed URL
 ```
 
 ```powershell
-# Windows PowerShell
-$env:ELM = 'java -jar C:\path\to\elm.jar'; ./build.ps1
+# Windows
+$env:ELM = 'java -jar C:\path\to\elm.jar'; $env:EDITOR = '..\elm-editor'; ./build.ps1
 ```
 
-Then open `build/index.html` in a browser.
+`build.sh` copies the interpreter modules into `vendor/`, compiles `src/Main.elm` with the elm-lang
+JS backend (`--no-check`, as the interpreter leans on idioms the strict checker doesn't fully
+analyse), copies `VegaLite.elm` (the app fetches it at runtime to feed the interpreter), and writes
+`build/index.html` (vega + vega-embed from a CDN, the app, and the port wiring).
 
-### What `build.sh` runs per example
+## Layout
 
-```sh
-elm make src/BarChart.elm --project=elm.json -o build/BarChart.js
-```
+| Path | Role |
+|---|---|
+| [src/Main.elm](src/Main.elm) | The `Browser.element` app: editor, examples, wizard, and the `renderSpec` port. |
+| [src/VegaLite.elm](src/VegaLite.elm) | The Vega-Lite library (interpreted at runtime; also compiled into the project). |
+| [src/Examples.elm](src/Examples.elm) | The built-in example programs. |
+| [src/Wizard.elm](src/Wizard.elm) | CSV parsing + Elm code generation for the new-chart wizard. |
+| `vendor/` | Interpreter modules copied from elm-editor at build time (git-ignored). |
+| [legacy/](legacy/) | The original ten **full-grammar** `gicentre/elm-vega` examples + their static-gallery build scripts. |
 
-`--project` makes the compiler load the project's `elm.json` dependencies — including
-`gicentre/elm-vega` — from the package cache alongside the local source.
+## How it renders without an Elm/DOM clash
 
-## How the wiring works
-
-The elm-lang JS backend compiles the worker into a bundle that starts itself and exposes
-its ports on `window.$app`. The host page subscribes and renders:
-
-```js
-window.$app.ports.elmToJS.subscribe(function (namedSpecs) {
-  Object.keys(namedSpecs).forEach(function (name) {
-    vegaEmbed("#vis", namedSpecs[name], { actions: true });
-  });
-});
-```
-
-(The official Elm compiler exposes `Elm.Main.init().ports.…` instead; the spec-building
-Elm code is identical either way.)
-
-## Dependencies
-
-Added with the elm-lang package manager:
-
-```sh
-elm install gicentre/elm-vega --elm
-```
-
-See [`elm.json`](elm.json) for the resolved dependency set.
+vega-embed injects its own SVG into `#vis`, which Elm's virtual DOM would otherwise wipe on the next
+re-render. `Main` wraps the preview in `Html.Lazy.lazy` with a constant argument, so the elm-lang
+runtime reuses that node and never re-diffs its children — the chart survives every edit.

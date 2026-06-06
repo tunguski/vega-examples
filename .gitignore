@@ -1,6 +1,9 @@
 # Compiled output (run ./build.sh to regenerate)
 build/
 
+# Interpreter modules vendored from ../elm-editor at build time (build.sh copies them)
+vendor/
+
 # elm-lang / elm tooling caches
 elm-stuff/
 *.js

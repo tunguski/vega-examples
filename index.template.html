@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Elm · Vega-Lite editor</title>
+    <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+    <style>
+      :root { --bg:#1e1e2e; --panel:#252537; --ink:#e6e6f0; --muted:#9a9ab0; --accent:#7c5cff; --line:#34344a; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; }
+      body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+      #app, .app { height: 100%; }
+      .app { display: flex; flex-direction: column; }
+      .header { display: flex; align-items: center; gap: 1rem; padding: .6rem 1rem; border-bottom: 1px solid var(--line); }
+      .header h1 { font-size: 1.05rem; margin: 0; }
+      .tagline { color: var(--muted); font-size: .85rem; flex: 1; }
+      button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: .35rem .7rem; cursor: pointer; }
+      button:hover { border-color: var(--accent); }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      .body { flex: 1; display: grid; grid-template-columns: 180px 1fr 1fr; min-height: 0; }
+      .sidebar { border-right: 1px solid var(--line); padding: .6rem; overflow: auto; }
+      .label { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; margin: .2rem 0 .5rem; }
+      .examples { display: flex; flex-direction: column; gap: .3rem; }
+      .example { text-align: left; }
+      .example.active { border-color: var(--accent); color: #fff; }
+      .editor { display: flex; flex-direction: column; border-right: 1px solid var(--line); min-height: 0; }
+      .code { flex: 1; resize: none; border: 0; outline: 0; padding: 1rem; background: #15151f; color: #d7d7ea;
+              font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; line-height: 1.5; tab-size: 2; }
+      .status { padding: .4rem 1rem; font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line); }
+      .status.ok { color: #5fd07a; }
+      .error { padding: .6rem 1rem; font-family: ui-monospace, monospace; font-size: .8rem; color: #ff8a8a;
+               background: #2a1f2a; border-top: 1px solid var(--line); white-space: pre-wrap; max-height: 9rem; overflow: auto; }
+      .preview { padding: 1.2rem; overflow: auto; background: #fff; }
+      .vega-err { color: #b00; white-space: pre-wrap; font-family: ui-monospace, monospace; }
+      .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; }
+      .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1.2rem; width: 460px; max-width: 92vw; max-height: 90vh; overflow: auto; }
+      .modal h1 { font-size: 1.1rem; margin: 0 0 .8rem; }
+      .field { margin-bottom: .7rem; }
+      .field-label { font-size: .78rem; color: var(--muted); margin-bottom: .25rem; }
+      .field select, .csv { width: 100%; background: #15151f; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .35rem; font: inherit; }
+      .csv { font-family: ui-monospace, monospace; font-size: 12px; }
+      .twin { display: flex; gap: .5rem; }
+      .twin > * { flex: 1; }
+      .modal-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script src="app.js"></script>
+    <script>
+      // The compiled app exposes its ports on window.$app (the elm-lang JS backend). On each spec it
+      // emits, render it with vega-embed into the #vis element the app created (kept stable by lazy).
+      window.$app.ports.renderSpec.subscribe(function (json) {
+        var el = document.getElementById("vis");
+        if (!el || !json) return;
+        var spec;
+        try { spec = JSON.parse(json); } catch (e) { return; }
+        vegaEmbed(el, spec, { actions: true, renderer: "svg" }).catch(function (e) {
+          el.innerHTML = '<pre class="vega-err">' + String(e) + "</pre>";
+        });
+      });
+    </script>
+  </body>
+</html>
