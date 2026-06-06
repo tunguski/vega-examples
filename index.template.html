@@ -59,7 +59,12 @@
       .modal h1 { font-size: 1.1rem; margin: 0 0 .8rem; }
       .field { margin-bottom: .7rem; }
       .field-label { font-size: .78rem; color: var(--muted); margin-bottom: .25rem; }
-      .field select, .csv { width: 100%; background: #15151f; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .35rem; font: inherit; }
+      .field select, .csv, .text-input { width: 100%; background: #15151f; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .35rem; font: inherit; }
+      .field-error { color: #ff8a8a; font-size: .8rem; margin: -.4rem 0 .6rem; }
+      button[disabled] { opacity: .45; cursor: not-allowed; }
+      button[disabled]:hover { border-color: var(--line); }
+      .workspace-label { margin-top: 1rem; }
+      .empty { color: var(--muted); font-size: .78rem; padding: .2rem .1rem; }
       .csv { font-family: ui-monospace, monospace; font-size: 12px; }
       .twin { display: flex; gap: .5rem; }
       .twin > * { flex: 1; }

@@ -20,8 +20,11 @@ It is built on the [elm-lang](https://github.com/tunguski/elm-lang) ecosystem:
   line-number gutter, via a transparent textarea over a highlighted `<pre>`.
 - **Examples** — a sidebar of ready-made charts: bar, grouped bar, line, area, scatter, bubble, pie,
   donut and histogram.
-- **New-chart wizard** — pick a chart type, paste a small CSV dataset, map columns to the x / y /
-  colour channels, and it generates an editable Elm program for you.
+- **Workspace** — a second sidebar group holding the modules you create in this browser session.
+  Selecting one loads it; edits are written back to it (editing an example is transient).
+- **New-chart wizard** — give the module a **name** (required, and unique within the workspace), pick
+  a chart type, paste a small CSV dataset, and map columns to the x / y / colour channels. It
+  generates an editable Elm module and adds it to the workspace.
 
 ## The `VegaLite` module
 

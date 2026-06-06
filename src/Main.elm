@@ -16,8 +16,8 @@ import EvalJson
 import Eval
 import Examples exposing (Example)
 import Highlight
-import Html exposing (Html, button, div, h1, option, select, span, text, textarea)
-import Html.Attributes exposing (class, classList, id, rows, selected, value)
+import Html exposing (Html, button, div, h1, input, option, select, span, text, textarea)
+import Html.Attributes exposing (class, classList, disabled, id, placeholder, rows, selected, value)
 import Html.Events exposing (on, onClick, onInput)
 import Html.Lazy exposing (lazy)
 import Http
@@ -43,12 +43,20 @@ main =
 -- MODEL
 
 
+{-| What the editor is currently bound to. Editing an example is transient (a scratch copy); editing
+a workspace module writes back to it. -}
+type Selection
+    = SelExample String
+    | SelWorkspace String
+
+
 type alias Model =
     { code : String
     , caret : Int -- caret offset, for the code editor's current-line gutter highlight
     , lib : Maybe String -- the VegaLite.elm source, fetched at startup (fed to the interpreter)
     , error : Maybe String
-    , selected : String
+    , selected : Selection
+    , workspace : List Example -- user-created modules, in memory for this browser session
     , wizard : Maybe Wizard.Form
     }
 
@@ -59,7 +67,8 @@ init _ =
       , caret = 0
       , lib = Nothing
       , error = Nothing
-      , selected = "Bar chart"
+      , selected = SelExample "Bar chart"
+      , workspace = []
       , wizard = Nothing
       }
     , Http.get { url = "VegaLite.elm", expect = Http.expectString LibLoaded }
@@ -74,6 +83,7 @@ type Msg
     = CodeChanged String Int
     | LibLoaded (Result Http.Error String)
     | PickExample Example
+    | PickWorkspace Example
     | OpenWizard
     | CloseWizard
     | SetWizard Wizard.Form
@@ -84,7 +94,8 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         CodeChanged code caret ->
-            compile { model | code = code, caret = caret }
+            -- Edits to a workspace module are written back to it; edits to an example are transient.
+            compile { model | code = code, caret = caret, workspace = writeBack model.selected code model.workspace }
 
         LibLoaded (Ok lib) ->
             compile { model | lib = Just lib }
@@ -95,7 +106,10 @@ update msg model =
             )
 
         PickExample ex ->
-            compile { model | code = ex.code, caret = 0, selected = ex.name }
+            compile { model | code = ex.code, caret = 0, selected = SelExample ex.name }
+
+        PickWorkspace m ->
+            compile { model | code = m.code, caret = 0, selected = SelWorkspace m.name }
 
         OpenWizard ->
             ( { model | wizard = Just Wizard.default }, Cmd.none )
@@ -109,10 +123,66 @@ update msg model =
         CreateFromWizard ->
             case model.wizard of
                 Just form ->
-                    compile { model | code = Wizard.generate form, caret = 0, wizard = Nothing, selected = "" }
+                    case nameError model.workspace form of
+                        Just _ ->
+                            -- Invalid name: keep the wizard open (the message is shown in the modal).
+                            ( model, Cmd.none )
+
+                        Nothing ->
+                            let
+                                name =
+                                    String.trim form.name
+
+                                newModule =
+                                    { name = name, code = Wizard.generate form }
+                            in
+                            compile
+                                { model
+                                    | code = newModule.code
+                                    , caret = 0
+                                    , wizard = Nothing
+                                    , selected = SelWorkspace name
+                                    , workspace = model.workspace ++ [ newModule ]
+                                }
 
                 Nothing ->
                     ( model, Cmd.none )
+
+
+{-| When a workspace module is selected, persist the edited code back into the workspace list. -}
+writeBack : Selection -> String -> List Example -> List Example
+writeBack selection code workspace =
+    case selection of
+        SelWorkspace name ->
+            List.map
+                (\m ->
+                    if m.name == name then
+                        { m | code = code }
+
+                    else
+                        m
+                )
+                workspace
+
+        SelExample _ ->
+            workspace
+
+
+{-| Validates the wizard's module name: required, and unique within the workspace. -}
+nameError : List Example -> Wizard.Form -> Maybe String
+nameError workspace form =
+    let
+        name =
+            String.trim form.name
+    in
+    if name == "" then
+        Just "Please enter a module name."
+
+    else if List.any (\m -> m.name == name) workspace then
+        Just ("A workspace module named \"" ++ name ++ "\" already exists.")
+
+    else
+        Nothing
 
 
 {-| Interpret the current program against the VegaLite library and render (or record the error). -}
@@ -146,7 +216,7 @@ view model =
             ]
         , case model.wizard of
             Just form ->
-                viewWizard form
+                viewWizard model form
 
             Nothing ->
                 text ""
@@ -168,16 +238,33 @@ viewSidebar model =
         [ div [ class "label" ] [ text "Examples" ]
         , div [ class "examples" ]
             (List.map (exampleButton model.selected) Examples.all)
+        , div [ class "label workspace-label" ] [ text "Workspace" ]
+        , div [ class "examples" ]
+            (if List.isEmpty model.workspace then
+                [ div [ class "empty" ] [ text "Use “+ New chart” to create a module." ] ]
+
+             else
+                List.map (workspaceButton model.selected) model.workspace
+            )
         ]
 
 
-exampleButton : String -> Example -> Html Msg
+exampleButton : Selection -> Example -> Html Msg
 exampleButton selected ex =
     button
-        [ classList [ ( "example", True ), ( "active", ex.name == selected ) ]
+        [ classList [ ( "example", True ), ( "active", selected == SelExample ex.name ) ]
         , onClick (PickExample ex)
         ]
         [ text ex.name ]
+
+
+workspaceButton : Selection -> Example -> Html Msg
+workspaceButton selected m =
+    button
+        [ classList [ ( "example", True ), ( "active", selected == SelWorkspace m.name ) ]
+        , onClick (PickWorkspace m)
+        ]
+        [ text m.name ]
 
 
 viewEditor : Model -> Html Msg
@@ -215,11 +302,30 @@ viewPreview _ =
 -- WIZARD VIEW
 
 
-viewWizard : Wizard.Form -> Html Msg
-viewWizard form =
+viewWizard : Model -> Wizard.Form -> Html Msg
+viewWizard model form =
+    let
+        err =
+            nameError model.workspace form
+    in
     div [ class "modal-backdrop" ]
         [ div [ class "modal" ]
             [ h1 [] [ text "New chart" ]
+            , field "Module name"
+                (input
+                    [ class "text-input"
+                    , placeholder "e.g. SalesByMonth"
+                    , value form.name
+                    , onInput (\v -> SetWizard { form | name = v })
+                    ]
+                    []
+                )
+            , case err of
+                Just message ->
+                    div [ class "field-error" ] [ text message ]
+
+                Nothing ->
+                    text ""
             , field "Chart type"
                 (selectInput Wizard.markChoices form.mark (\v -> SetWizard { form | mark = v }))
             , field "Data (CSV)"
@@ -247,7 +353,7 @@ viewWizard form =
                 ]
             , div [ class "modal-actions" ]
                 [ button [ onClick CloseWizard ] [ text "Cancel" ]
-                , button [ class "primary", onClick CreateFromWizard ] [ text "Create" ]
+                , button [ class "primary", disabled (err /= Nothing), onClick CreateFromWizard ] [ text "Create" ]
                 ]
             ]
         ]

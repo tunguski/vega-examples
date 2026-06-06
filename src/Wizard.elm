@@ -7,7 +7,8 @@ generation); the form UI and messages live in `Main`.
 
 
 type alias Form =
-    { mark : String
+    { name : String
+    , mark : String
     , csv : String
     , xField : String
     , xType : String
@@ -19,7 +20,8 @@ type alias Form =
 
 default : Form
 default =
-    { mark = "bar"
+    { name = ""
+    , mark = "bar"
     , csv = "category,amount\nApples,28\nPears,55\nPlums,43\nCherries,91\nFigs,81"
     , xField = "category"
     , xType = "nominal"
@@ -88,11 +90,26 @@ isNumeric values =
 -- CODE GENERATION -----------------------------------------------------------------------------
 
 
+{-| A valid Elm module name derived from the user's name (capitalised, alphanumerics only). -}
+safeModule : String -> String
+safeModule name =
+    let
+        cleaned =
+            String.filter (\c -> Char.isAlphaNum c) name
+    in
+    case String.uncons cleaned of
+        Just ( first, rest ) ->
+            String.toUpper (String.fromChar first) ++ rest
+
+        Nothing ->
+            "Chart"
+
+
 {-| Generate a complete Elm program for the chosen chart. -}
 generate : Form -> String
 generate form =
     String.join "\n"
-        [ "module Main exposing (main)"
+        [ "module " ++ safeModule form.name ++ " exposing (main)"
         , ""
         , "import VegaLite exposing (..)"
         , ""
