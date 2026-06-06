@@ -1,0 +1,78 @@
+name: Deploy to GitHub Pages
+
+# Builds the live Vega-Lite editor and publishes it to https://tunguski.github.io/vega-examples/.
+#
+# The app is compiled by the elm-lang CLI and embeds the elm-editor interpreter, so the workflow
+# checks out both sibling repos and builds the elm-lang jar before running ./build.sh.
+#
+# One-time setup: in the repo's Settings → Pages, set "Source" to "GitHub Actions".
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One concurrent deployment; a newer push cancels an in-flight build.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out vega-examples
+        uses: actions/checkout@v4
+
+      - name: Check out elm-lang (the compiler)
+        uses: actions/checkout@v4
+        with:
+          repository: tunguski/elm-lang
+          path: .toolchain/elm-lang
+
+      - name: Check out elm-editor (the interpreter the app embeds)
+        uses: actions/checkout@v4
+        with:
+          repository: tunguski/elm-editor
+          path: .toolchain/elm-editor
+
+      - name: Set up GraalVM for JDK 25
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm'
+          cache: 'maven'
+
+      - name: Build the elm-lang CLI (elm.jar)
+        working-directory: .toolchain/elm-lang
+        run: |
+          chmod +x ./mvnw
+          ./mvnw -B -ntp -DskipTests package
+
+      - name: Build the editor
+        run: |
+          chmod +x ./build.sh
+          ELM="java -jar $GITHUB_WORKSPACE/.toolchain/elm-lang/target/elm.jar" \
+            EDITOR="$GITHUB_WORKSPACE/.toolchain/elm-editor" \
+            ./build.sh
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
