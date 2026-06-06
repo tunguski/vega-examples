@@ -15,7 +15,9 @@ It is built on the [elm-lang](https://github.com/tunguski/elm-lang) ecosystem:
 
 ## Features
 
-- **Live editing** — write Elm using the `VegaLite` API; the chart updates as you type.
+- **Live editing** — write Elm using the `VegaLite` API; the chart updates as you type. The code
+  pane is elm-editor's reusable `CodeEditor` widget — syntax highlighting (`Highlight.segments`) and a
+  line-number gutter, via a transparent textarea over a highlighted `<pre>`.
 - **Examples** — a sidebar of ready-made charts: bar, grouped bar, line, area, scatter, bubble, pie,
   donut and histogram.
 - **New-chart wizard** — pick a chart type, paste a small CSV dataset, map columns to the x / y /

@@ -14,7 +14,7 @@ $Out = 'build'
 
 # 1) Vendor the interpreter modules from elm-editor (only the engine).
 New-Item -ItemType Directory -Force -Path vendor | Out-Null
-foreach ($m in 'Lang','Lexer','Parser','EvalJson','EvalPlayground','EvalRender','Eval','Highlight') {
+foreach ($m in 'Lang','Lexer','Parser','EvalJson','EvalPlayground','EvalRender','Eval','Highlight','CodeEditor') {
   $srcFile = Join-Path $Editor "src/$m.elm"
   if (-not (Test-Path $srcFile)) {
     Write-Error "missing $srcFile - set EDITOR to the elm-editor checkout"

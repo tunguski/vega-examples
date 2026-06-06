@@ -27,8 +27,27 @@
       .example { text-align: left; }
       .example.active { border-color: var(--accent); color: #fff; }
       .editor { display: flex; flex-direction: column; border-right: 1px solid var(--line); min-height: 0; }
-      .code { flex: 1; resize: none; border: 0; outline: 0; padding: 1rem; background: #15151f; color: #d7d7ea;
-              font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; line-height: 1.5; tab-size: 2; }
+      /* CodeEditor (ce-*): a transparent textarea layered over a highlighted <pre> + a line gutter. */
+      .ce-editor { flex: 1; min-height: 0; overflow: auto; background: #15151f; }
+      .ce-flex { display: flex; min-height: 100%; }
+      .ce-gutter { user-select: none; text-align: right; padding: 14px 8px 14px 12px; background: #12121b;
+                   color: #56566e; font-family: ui-monospace, monospace; font-size: 13px; line-height: 1.5; white-space: pre; }
+      .ce-gutter-line.current { background: #2a2a40; color: var(--ink); }
+      .ce-area { position: relative; flex: 1; min-width: 0; }
+      /* The <pre> and <textarea> MUST share these exactly to stay aligned. */
+      .ce-code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; line-height: 1.5;
+                 padding: 14px; box-sizing: border-box; white-space: pre-wrap; word-break: break-word; width: 100%;
+                 min-height: 100%; tab-size: 2; }
+      .ce-pre { margin: 0; pointer-events: none; color: #d7d7ea; }
+      .ce-textarea { position: absolute; top: 0; left: 0; height: 100%; color: transparent; background: transparent;
+                     caret-color: var(--accent); border: none; outline: none; resize: none; overflow: hidden; }
+      .ce-seg { color: #d7d7ea; }
+      .ce-seg-kw { color: #c792ea; }
+      .ce-seg-type { color: #82aaff; }
+      .ce-seg-num { color: #f78c6c; }
+      .ce-seg-str { color: #c3e88d; }
+      .ce-seg-com { color: #637084; }
+      .ce-seg-op { color: #89ddff; }
       .status { padding: .4rem 1rem; font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line); }
       .status.ok { color: #5fd07a; }
       .error { padding: .6rem 1rem; font-family: ui-monospace, monospace; font-size: .8rem; color: #ff8a8a;

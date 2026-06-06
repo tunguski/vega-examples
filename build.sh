@@ -18,7 +18,7 @@ OUT="build"
 
 # 1) Vendor the interpreter modules from elm-editor (only the engine — not its UI/Main).
 mkdir -p vendor
-for m in Lang Lexer Parser EvalJson EvalPlayground EvalRender Eval Highlight; do
+for m in Lang Lexer Parser EvalJson EvalPlayground EvalRender Eval Highlight CodeEditor; do
   if [ ! -f "$EDITOR/src/$m.elm" ]; then
     echo "build.sh: missing $EDITOR/src/$m.elm — set EDITOR to the elm-editor checkout" >&2
     exit 1

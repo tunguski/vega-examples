@@ -11,9 +11,11 @@ No server, no recompilation: editing the code re-interprets it on every keystrok
 -}
 
 import Browser
+import CodeEditor
 import EvalJson
 import Eval
 import Examples exposing (Example)
+import Highlight
 import Html exposing (Html, button, div, h1, option, select, span, text, textarea)
 import Html.Attributes exposing (class, classList, id, rows, selected, value)
 import Html.Events exposing (on, onClick, onInput)
@@ -43,6 +45,7 @@ main =
 
 type alias Model =
     { code : String
+    , caret : Int -- caret offset, for the code editor's current-line gutter highlight
     , lib : Maybe String -- the VegaLite.elm source, fetched at startup (fed to the interpreter)
     , error : Maybe String
     , selected : String
@@ -53,6 +56,7 @@ type alias Model =
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( { code = Examples.starter
+      , caret = 0
       , lib = Nothing
       , error = Nothing
       , selected = "Bar chart"
@@ -67,7 +71,7 @@ init _ =
 
 
 type Msg
-    = CodeChanged String
+    = CodeChanged String Int
     | LibLoaded (Result Http.Error String)
     | PickExample Example
     | OpenWizard
@@ -79,8 +83,8 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        CodeChanged code ->
-            compile { model | code = code }
+        CodeChanged code caret ->
+            compile { model | code = code, caret = caret }
 
         LibLoaded (Ok lib) ->
             compile { model | lib = Just lib }
@@ -91,7 +95,7 @@ update msg model =
             )
 
         PickExample ex ->
-            compile { model | code = ex.code, selected = ex.name }
+            compile { model | code = ex.code, caret = 0, selected = ex.name }
 
         OpenWizard ->
             ( { model | wizard = Just Wizard.default }, Cmd.none )
@@ -105,13 +109,10 @@ update msg model =
         CreateFromWizard ->
             case model.wizard of
                 Just form ->
-                    compile { model | code = Wizard.generate form, wizard = Nothing, selected = "" }
+                    compile { model | code = Wizard.generate form, caret = 0, wizard = Nothing, selected = "" }
 
                 Nothing ->
                     ( model, Cmd.none )
-
-        NoOp ->
-            ( model, Cmd.none )
 
 
 {-| Interpret the current program against the VegaLite library and render (or record the error). -}
@@ -182,12 +183,12 @@ exampleButton selected ex =
 viewEditor : Model -> Html Msg
 viewEditor model =
     div [ class "editor" ]
-        [ textarea
-            [ class "code"
-            , value model.code
-            , onInput CodeChanged
-            ]
-            []
+        [ CodeEditor.view
+            { source = model.code
+            , caret = model.caret
+            , highlight = Highlight.segments
+            , onChange = CodeChanged
+            }
         , case model.error of
             Just e ->
                 div [ class "error" ] [ text e ]
