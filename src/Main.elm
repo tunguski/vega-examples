@@ -22,7 +22,15 @@ import Html.Events exposing (on, onClick, onInput)
 import Html.Lazy exposing (lazy)
 import Http
 import Json.Decode as Decode
+import Json.Encode as Encode
+import Storage
 import Wizard
+
+
+{-| localStorage key under which the workspace modules are persisted across reloads. -}
+storageKey : String
+storageKey =
+    "vega-examples.workspace"
 
 
 {-| Outgoing: a Vega-Lite JSON spec to render (empty string clears the view). -}
@@ -71,7 +79,10 @@ init _ =
       , workspace = []
       , wizard = Nothing
       }
-    , Http.get { url = "VegaLite.elm", expect = Http.expectString LibLoaded }
+    , Cmd.batch
+        [ Http.get { url = "VegaLite.elm", expect = Http.expectString LibLoaded }
+        , Storage.load storageKey LoadedWorkspace
+        ]
     )
 
 
@@ -82,6 +93,7 @@ init _ =
 type Msg
     = CodeChanged String Int
     | LibLoaded (Result Http.Error String)
+    | LoadedWorkspace (Maybe String)
     | PickExample Example
     | PickWorkspace Example
     | OpenWizard
@@ -94,11 +106,27 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         CodeChanged code caret ->
-            -- Edits to a workspace module are written back to it; edits to an example are transient.
-            compile { model | code = code, caret = caret, workspace = writeBack model.selected code model.workspace }
+            -- Edits to a workspace module are written back to it (and persisted); editing an example
+            -- is transient.
+            let
+                updated =
+                    { model | code = code, caret = caret, workspace = writeBack model.selected code model.workspace }
+
+                ( rendered, renderCmd ) =
+                    compile updated
+            in
+            ( rendered, withSave model.selected rendered renderCmd )
 
         LibLoaded (Ok lib) ->
             compile { model | lib = Just lib }
+
+        LoadedWorkspace stored ->
+            case stored of
+                Just json ->
+                    ( { model | workspace = decodeWorkspace json }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
 
         LibLoaded (Err _) ->
             ( { model | error = Just "Could not load VegaLite.elm (serve the project over HTTP)." }
@@ -135,15 +163,18 @@ update msg model =
 
                                 newModule =
                                     { name = name, code = Wizard.generate form }
+
+                                ( rendered, renderCmd ) =
+                                    compile
+                                        { model
+                                            | code = newModule.code
+                                            , caret = 0
+                                            , wizard = Nothing
+                                            , selected = SelWorkspace name
+                                            , workspace = model.workspace ++ [ newModule ]
+                                        }
                             in
-                            compile
-                                { model
-                                    | code = newModule.code
-                                    , caret = 0
-                                    , wizard = Nothing
-                                    , selected = SelWorkspace name
-                                    , workspace = model.workspace ++ [ newModule ]
-                                }
+                            ( rendered, Cmd.batch [ renderCmd, persist rendered ] )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -199,6 +230,49 @@ compile model =
 
                 Err e ->
                     ( { model | error = Just e }, Cmd.none )
+
+
+{-| Batch a workspace save onto an existing command, but only when a workspace module is selected
+(so transient edits to an example aren't persisted). -}
+withSave : Selection -> Model -> Cmd Msg -> Cmd Msg
+withSave selection model cmd =
+    case selection of
+        SelWorkspace _ ->
+            Cmd.batch [ cmd, persist model ]
+
+        SelExample _ ->
+            cmd
+
+
+persist : Model -> Cmd Msg
+persist model =
+    Storage.save storageKey (encodeWorkspace model.workspace)
+
+
+encodeWorkspace : List Example -> String
+encodeWorkspace workspace =
+    Encode.encode 0
+        (Encode.list
+            (\m -> Encode.object [ ( "name", Encode.string m.name ), ( "code", Encode.string m.code ) ])
+            workspace
+        )
+
+
+decodeWorkspace : String -> List Example
+decodeWorkspace json =
+    case Decode.decodeString (Decode.list moduleDecoder) json of
+        Ok modules ->
+            modules
+
+        Err _ ->
+            []
+
+
+moduleDecoder : Decode.Decoder Example
+moduleDecoder =
+    Decode.map2 Example
+        (Decode.field "name" Decode.string)
+        (Decode.field "code" Decode.string)
 
 
 

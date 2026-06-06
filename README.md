@@ -20,8 +20,9 @@ It is built on the [elm-lang](https://github.com/tunguski/elm-lang) ecosystem:
   line-number gutter, via a transparent textarea over a highlighted `<pre>`.
 - **Examples** — a sidebar of ready-made charts: bar, grouped bar, line, area, scatter, bubble, pie,
   donut and histogram.
-- **Workspace** — a second sidebar group holding the modules you create in this browser session.
-  Selecting one loads it; edits are written back to it (editing an example is transient).
+- **Workspace** — a second sidebar group holding the modules you create. Selecting one loads it;
+  edits are written back to it (editing an example is transient). The workspace is **persisted to
+  `localStorage`** (via the interpreter's `Storage` builtins), so your modules survive a reload.
 - **New-chart wizard** — give the module a **name** (required, and unique within the workspace), pick
   a chart type, paste a small CSV dataset, and map columns to the x / y / colour channels. It
   generates an editable Elm module and adds it to the workspace.
