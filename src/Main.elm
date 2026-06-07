@@ -30,6 +30,7 @@ main =
         , sessionKey = "vega-examples.workspace"
         , fileBrowser = True
         , backLink = Nothing
+        , panels = []
         }
 
 
