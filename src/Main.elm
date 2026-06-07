@@ -28,6 +28,7 @@ main =
         , title = "Elm · Vega-Lite editor"
         , tagline = "write Elm, see a chart — interpreted live in your browser"
         , sessionKey = "vega-examples.workspace"
+        , fileBrowser = True
         }
 
 
