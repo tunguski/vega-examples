@@ -29,6 +29,7 @@ main =
         , tagline = "write Elm, see a chart — interpreted live in your browser"
         , sessionKey = "vega-examples.workspace"
         , fileBrowser = True
+        , backLink = Nothing
         }
 
 
