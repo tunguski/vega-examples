@@ -15,17 +15,16 @@ It is built on the [elm-lang](https://github.com/tunguski/elm-lang) ecosystem:
 
 ## Features
 
-- **Live editing** — write Elm using the `VegaLite` API; the chart updates as you type. The code
-  pane is elm-editor's reusable `CodeEditor` widget — syntax highlighting (`Highlight.segments`) and a
-  line-number gutter, via a transparent textarea over a highlighted `<pre>`.
-- **Examples** — a sidebar of ready-made charts: bar, grouped bar, line, area, scatter, bubble, pie,
-  donut and histogram.
-- **Workspace** — a second sidebar group holding the modules you create. Selecting one loads it;
-  edits are written back to it (editing an example is transient). The workspace is **persisted to
-  `localStorage`** (via the interpreter's `Storage` builtins), so your modules survive a reload.
-- **New-chart wizard** — give the module a **name** (required, and unique within the workspace), pick
-  a chart type, paste a small CSV dataset, and map columns to the x / y / colour channels. It
-  generates an editable Elm module and adds it to the workspace.
+- **Built on the elm-editor shell** (`Editor.program`) — a file browser, code editing with Elm
+  syntax highlighting + autocomplete, resizable panes, sharing and autosaved sessions. Write Elm
+  using the `VegaLite` API and the chart updates as you type.
+- **Examples** — the file browser opens with ready-made charts: bar, grouped bar, line, area,
+  scatter, bubble, pie, donut and histogram. Your own files are added alongside them and the whole
+  session is autosaved, so it survives a reload.
+- **New-chart wizard** — the file browser's **"+ New"** button opens a wizard: give the module a
+  **name** (required, and unique among the open files), pick a chart type, paste a small CSV dataset,
+  and map columns to the x / y / colour channels. It generates an editable Elm module and adds it as
+  a new file.
 
 ## The `VegaLite` module
 
@@ -78,15 +77,16 @@ analyse), copies `VegaLite.elm` (the app fetches it at runtime to feed the inter
 
 | Path | Role |
 |---|---|
-| [src/Main.elm](src/Main.elm) | The `Browser.element` app: editor, examples, wizard, and the `renderSpec` port. |
-| [src/VegaLite.elm](src/VegaLite.elm) | The Vega-Lite library (interpreted at runtime; also compiled into the project). |
-| [src/Examples.elm](src/Examples.elm) | The built-in example programs. |
+| [src/Main.elm](src/Main.elm) | The thin host: `Editor.program` wired with the Vega preview, the example files, the hidden `VegaLite` lib, and Elm code intelligence. |
+| [src/VegaPreview.elm](src/VegaPreview.elm) | The result pane (`Preview.Spec`): interprets the selected file to a spec and pushes it out the `renderSpec` port, **and owns the new-chart wizard** (the shell delegates the "+" button here). |
+| [src/VegaLite.elm](src/VegaLite.elm) | The Vega-Lite library (fetched at runtime and fed to the interpreter). |
+| [src/Examples.elm](src/Examples.elm) | The built-in example programs (the shell's initial files). |
 | [src/Wizard.elm](src/Wizard.elm) | CSV parsing + Elm code generation for the new-chart wizard. |
-| `vendor/` | Interpreter modules copied from elm-editor at build time (git-ignored). |
+| `vendor/` | elm-editor modules (interpreter engine + the `Editor` shell) copied at build time (git-ignored). |
 | [legacy/](legacy/) | The original ten **full-grammar** `gicentre/elm-vega` examples + their static-gallery build scripts. |
 
 ## How it renders without an Elm/DOM clash
 
 vega-embed injects its own SVG into `#vis`, which Elm's virtual DOM would otherwise wipe on the next
-re-render. `Main` wraps the preview in `Html.Lazy.lazy` with a constant argument, so the elm-lang
+re-render. `VegaPreview` wraps the chart pane in `Html.Lazy.lazy` with a constant argument, so the
 runtime reuses that node and never re-diffs its children — the chart survives every edit.
