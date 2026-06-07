@@ -21,23 +21,13 @@
       #vis { width: 100%; }
       .vega-err { color: #b00; white-space: pre-wrap; font-family: ui-monospace, monospace; }
 
-      /* New-chart wizard (rendered by VegaPreview; position:fixed so it overlays the whole window). */
-      .vega-result { height: 100%; min-height: 0; }
-      .wiz-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 50; }
-      .wiz-modal { background: #252537; color: #e6e6f0; border: 1px solid #34344a; border-radius: 10px; padding: 1.2rem; width: 460px; max-width: 92vw; max-height: 90vh; overflow: auto; font-family: system-ui, sans-serif; }
-      .wiz-modal h1 { font-size: 1.1rem; margin: 0 0 .8rem; }
-      .wiz-field { margin-bottom: .7rem; }
-      .wiz-field-label { font-size: .78rem; color: #9a9ab0; margin-bottom: .25rem; }
-      .wiz-input, .wiz-csv { width: 100%; background: #15151f; color: #e6e6f0; border: 1px solid #34344a; border-radius: 6px; padding: .35rem; font: inherit; box-sizing: border-box; }
-      .wiz-csv { font-family: ui-monospace, monospace; font-size: 12px; }
+      /* The chart Wizard source pane (rendered inside the shell's .ed-form-body). */
+      .wiz-panel { padding: 14px; display: flex; flex-direction: column; gap: .8rem; }
+      .wiz-field-label { font-size: .78rem; color: #9fb3c8; margin-bottom: .3rem; }
+      .wiz-input, .wiz-csv { width: 100%; background: #0f1720; color: #e6edf3; border: 1px solid #2f3e54; border-radius: 6px; padding: .4rem; font: inherit; box-sizing: border-box; }
+      .wiz-csv { font-family: ui-monospace, monospace; font-size: 12px; resize: vertical; }
       .wiz-twin { display: flex; gap: .5rem; }
       .wiz-twin > * { flex: 1; }
-      .wiz-error { color: #ff8a8a; font-size: .8rem; margin: -.4rem 0 .6rem; }
-      .wiz-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }
-      .wiz-actions button { font: inherit; color: #e6e6f0; background: #2f2f44; border: 1px solid #34344a; border-radius: 6px; padding: .35rem .8rem; cursor: pointer; }
-      .wiz-actions button:hover { border-color: #7c5cff; }
-      .wiz-primary { background: #7c5cff !important; border-color: #7c5cff !important; color: #fff; }
-      .wiz-actions button[disabled] { opacity: .45; cursor: not-allowed; }
     </style>
   </head>
   <body>

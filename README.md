@@ -21,10 +21,11 @@ It is built on the [elm-lang](https://github.com/tunguski/elm-lang) ecosystem:
 - **Examples** — the file browser opens with ready-made charts: bar, grouped bar, line, area,
   scatter, bubble, pie, donut and histogram. Your own files are added alongside them and the whole
   session is autosaved, so it survives a reload.
-- **New-chart wizard** — the file browser's **"+ New"** button opens a wizard: give the module a
-  **name** (required, and unique among the open files), pick a chart type, paste a small CSV dataset,
-  and map columns to the x / y / colour channels. It generates an editable Elm module and adds it as
-  a new file.
+- **Wizard source pane** — the code pane's title bar has a **Wizard** view next to **Code** (switch
+  with the icons, like the bs-theme-builder's form panel). The wizard is a structured, two-way view
+  of the *same* file: pick a chart type, edit the CSV, map columns to x / y / colour, and the Elm
+  source regenerates; switch to Code and it round-trips back into the form (`Wizard.parse` ⇄
+  `Wizard.generate`).
 
 ## The `VegaLite` module
 
@@ -78,10 +79,11 @@ analyse), copies `VegaLite.elm` (the app fetches it at runtime to feed the inter
 | Path | Role |
 |---|---|
 | [src/Main.elm](src/Main.elm) | The thin host: `Editor.program` wired with the Vega preview, the example files, the hidden `VegaLite` lib, and Elm code intelligence. |
-| [src/VegaPreview.elm](src/VegaPreview.elm) | The result pane (`Preview.Spec`): interprets the selected file to a spec and pushes it out the `renderSpec` port, **and owns the new-chart wizard** (the shell delegates the "+" button here). |
+| [src/VegaPreview.elm](src/VegaPreview.elm) | The result pane (`Preview.Spec`): interprets the selected file to a spec and pushes it out the `renderSpec` port. |
+| [src/WizardPanel.elm](src/WizardPanel.elm) | The wizard **source pane** (an `Editor.Panel`): a form view of the file that emits the regenerated source on every change. |
+| [src/Wizard.elm](src/Wizard.elm) | The wizard's pure core: `parse` (source → form) and `generate` (form → source), plus CSV handling. |
 | [src/VegaLite.elm](src/VegaLite.elm) | The Vega-Lite library (fetched at runtime and fed to the interpreter). |
 | [src/Examples.elm](src/Examples.elm) | The built-in example programs (the shell's initial files). |
-| [src/Wizard.elm](src/Wizard.elm) | CSV parsing + Elm code generation for the new-chart wizard. |
 | `vendor/` | elm-editor modules (interpreter engine + the `Editor` shell) copied at build time (git-ignored). |
 | [legacy/](legacy/) | The original ten **full-grammar** `gicentre/elm-vega` examples + their static-gallery build scripts. |
 

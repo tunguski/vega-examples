@@ -15,6 +15,7 @@ import Editor
 import Examples
 import Highlight
 import VegaPreview
+import WizardPanel
 
 
 main : Program () (Editor.Model VegaPreview.Model VegaPreview.Msg) (Editor.Msg VegaPreview.Msg)
@@ -30,8 +31,19 @@ main =
         , sessionKey = "vega-examples.workspace"
         , fileBrowser = True
         , backLink = Nothing
-        , panels = []
+        , panels = [ wizardPanel ]
         }
+
+
+{-| The chart wizard as an alternative source pane: a form view of the selected file, switchable with
+the code editor via the code pane's title-bar icons. -}
+wizardPanel : Editor.Panel
+wizardPanel =
+    { icon = "wizard"
+    , title = "Wizard"
+    , tabs = []
+    , view = WizardPanel.view
+    }
 
 
 {-| Elm code intelligence wired into the shell's code pane: syntax highlighting, identifier

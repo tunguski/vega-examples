@@ -1,14 +1,14 @@
-module Wizard exposing (Form, default, headers, generate, markChoices, typeChoices)
+module Wizard exposing (Form, default, headers, generate, parse, markChoices, typeChoices)
 
-{-| The "new chart" wizard: turns a chart type + a small CSV dataset + a field mapping into a
-ready-to-edit Elm program written against the `VegaLite` module. Pure helpers (parsing + code
-generation); the form UI and messages live in `Main`.
+{-| The chart wizard: a structured, two-way view of a Vega-Lite program. `generate` turns a chart
+type + a small CSV dataset + a field mapping into an Elm program written against the `VegaLite`
+module; `parse` reads such a program back into the form (best-effort, so switching the editor's
+Code ⇄ Wizard panes reflects the current source). Pure helpers — the panel UI lives in `WizardPanel`.
 -}
 
 
 type alias Form =
-    { name : String
-    , mark : String
+    { mark : String
     , csv : String
     , xField : String
     , xType : String
@@ -20,8 +20,7 @@ type alias Form =
 
 default : Form
 default =
-    { name = ""
-    , mark = "bar"
+    { mark = "bar"
     , csv = "category,amount\nApples,28\nPears,55\nPlums,43\nCherries,91\nFigs,81"
     , xField = "category"
     , xType = "nominal"
@@ -90,26 +89,11 @@ isNumeric values =
 -- CODE GENERATION -----------------------------------------------------------------------------
 
 
-{-| A valid Elm module name derived from the user's name (capitalised, alphanumerics only). -}
-safeModule : String -> String
-safeModule name =
-    let
-        cleaned =
-            String.filter (\c -> Char.isAlphaNum c) name
-    in
-    case String.uncons cleaned of
-        Just ( first, rest ) ->
-            String.toUpper (String.fromChar first) ++ rest
-
-        Nothing ->
-            "Chart"
-
-
 {-| Generate a complete Elm program for the chosen chart. -}
 generate : Form -> String
 generate form =
     String.join "\n"
-        [ "module " ++ safeModule form.name ++ " exposing (main)"
+        [ "module Main exposing (main)"
         , ""
         , "import VegaLite exposing (..)"
         , ""
@@ -177,3 +161,197 @@ encodingBlock form =
 quote : String -> String
 quote s =
     "\"" ++ s ++ "\""
+
+
+
+-- PARSING (source -> Form), so the Wizard panel reflects the current program -----------------
+
+
+{-| Best-effort read of a generated program back into the form, so switching the editor's Code ⇄
+Wizard panes keeps the form in sync with the source. Anything not recognised falls back to a default.
+-}
+parse : String -> Form
+parse source =
+    let
+        lines =
+            String.lines source
+
+        trimmed =
+            List.map (stripComma << String.trim) lines
+
+        ( colorField, _ ) =
+            parseChannel "pColor" trimmed |> Maybe.withDefault ( "", "" )
+
+        ( xField, xType ) =
+            parseChannel "pX" trimmed |> Maybe.withDefault ( default.xField, default.xType )
+
+        ( yField, yType ) =
+            parseChannel "pY" trimmed |> Maybe.withDefault ( default.yField, default.yType )
+    in
+    { mark = parseMark trimmed |> Maybe.withDefault default.mark
+    , csv = parseCsv lines |> Maybe.withDefault default.csv
+    , xField = xField
+    , xType = xType
+    , yField = yField
+    , yType = yType
+    , color = colorField
+    }
+
+
+{-| Drop a leading list comma (`", "`) so `, mark bar` and `mark bar` parse alike. -}
+stripComma : String -> String
+stripComma s =
+    if String.startsWith ", " s then
+        String.dropLeft 2 s
+
+    else
+        s
+
+
+{-| The mark name from a `mark <name> [ … ]` line (the second word). -}
+parseMark : List String -> Maybe String
+parseMark lines =
+    lines
+        |> List.filterMap
+            (\s ->
+                if String.startsWith "mark " s then
+                    nth 1 (String.words s)
+
+                else
+                    Nothing
+            )
+        |> List.head
+
+
+{-| The (field, type) of a channel line like `pX "amount" [ quantitative ]`. -}
+parseChannel : String -> List String -> Maybe ( String, String )
+parseChannel prefix lines =
+    lines
+        |> List.filterMap
+            (\s ->
+                if String.startsWith (prefix ++ " \"") s then
+                    Maybe.map2 Tuple.pair (nth 1 (String.split "\"" s)) (bracketWord s)
+
+                else
+                    Nothing
+            )
+        |> List.head
+
+
+{-| The first word inside the `[ … ]` of a line (the field type / first mark prop). -}
+bracketWord : String -> Maybe String
+bracketWord s =
+    s
+        |> String.split "["
+        |> nth 1
+        |> Maybe.andThen (String.split "]" >> List.head)
+        |> Maybe.andThen (String.trim >> String.words >> List.head)
+
+
+{-| Rebuild the CSV from a `dataFromColumns [ ( "c", strings/numbers [ … ] ) … ]` block. -}
+parseCsv : List String -> Maybe String
+parseCsv lines =
+    let
+        afterData =
+            dropThrough (String.contains "dataFromColumns") lines
+
+        block =
+            takeWhile (\l -> String.trim l /= "]") afterData
+
+        cols =
+            List.filterMap parseColumn block
+    in
+    if List.isEmpty cols then
+        Nothing
+
+    else
+        Just (columnsToCsv cols)
+
+
+{-| One `( "name", strings|numbers [ v, v ] )` column line → (name, values). -}
+parseColumn : String -> Maybe ( String, List String )
+parseColumn line =
+    let
+        valuesAfter kind =
+            if String.contains (kind ++ " [") line then
+                String.split (kind ++ " [") line
+                    |> nth 1
+                    |> Maybe.andThen (String.split "]" >> List.head)
+                    |> Maybe.map
+                        (String.split ","
+                            >> List.map (String.trim >> unquote)
+                            >> List.filter (\v -> v /= "")
+                        )
+
+            else
+                Nothing
+    in
+    Maybe.map2 Tuple.pair
+        (nth 1 (String.split "\"" line))
+        (case valuesAfter "strings" of
+            Just vs ->
+                Just vs
+
+            Nothing ->
+                valuesAfter "numbers"
+        )
+
+
+columnsToCsv : List ( String, List String ) -> String
+columnsToCsv cols =
+    let
+        names =
+            List.map Tuple.first cols
+
+        valueLists =
+            List.map Tuple.second cols
+
+        rowCount =
+            valueLists |> List.map List.length |> List.maximum |> Maybe.withDefault 0
+
+        row i =
+            String.join "," (List.map (\vs -> nth i vs |> Maybe.withDefault "") valueLists)
+    in
+    String.join "\n" (String.join "," names :: List.map row (List.range 0 (rowCount - 1)))
+
+
+unquote : String -> String
+unquote s =
+    if String.startsWith "\"" s && String.endsWith "\"" s && String.length s >= 2 then
+        String.dropLeft 1 (String.dropRight 1 s)
+
+    else
+        s
+
+
+nth : Int -> List a -> Maybe a
+nth i xs =
+    List.head (List.drop i xs)
+
+
+dropThrough : (a -> Bool) -> List a -> List a
+dropThrough p xs =
+    case xs of
+        [] ->
+            []
+
+        x :: rest ->
+            if p x then
+                rest
+
+            else
+                dropThrough p rest
+
+
+takeWhile : (a -> Bool) -> List a -> List a
+takeWhile p xs =
+    case xs of
+        [] ->
+            []
+
+        x :: rest ->
+            if p x then
+                x :: takeWhile p rest
+
+            else
+                []
