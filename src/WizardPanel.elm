@@ -8,11 +8,16 @@ The contract is `Int -> String -> Html String`: given the active tab (unused —
 current source, render a form (parsed from that source with `Wizard.parse`) whose every change emits
 the **regenerated full source** (`Wizard.generate`). The shell folds that back into the file — so the
 form and the code stay two views of one program.
+
+The basic chart controls are always visible; the chart frame and mark options live in a folded
+"Advanced" `<details>` section at the bottom (its open/closed state lives in the DOM, so this stateless
+panel needs no extra state). Controls emit on **change** (blur), so typing in a text field doesn't
+regenerate — and reset the caret — on every keystroke.
 -}
 
-import Html exposing (Html, div, option, select, text, textarea)
-import Html.Attributes exposing (class, rows, selected, value)
-import Html.Events exposing (on, onInput)
+import Html exposing (Html, div, input, label, node, option, select, text, textarea)
+import Html.Attributes exposing (checked, class, placeholder, rows, selected, type_, value)
+import Html.Events exposing (on)
 import Json.Decode as Decode
 import Wizard exposing (Form)
 
@@ -31,11 +36,7 @@ view _ source =
             (picker Wizard.markChoices form.mark (\v -> { form | mark = v }))
         , field "Data (CSV)"
             (textarea
-                [ class "wiz-input wiz-csv"
-                , rows 8
-                , value form.csv
-                , onInput (\v -> Wizard.generate { form | csv = v })
-                ]
+                [ class "wiz-input wiz-csv", rows 8, value form.csv, onEdit (\v -> { form | csv = v }) ]
                 []
             )
         , field "X axis"
@@ -50,6 +51,34 @@ view _ source =
             )
         , field "Colour by"
             (picker ("" :: cols) form.color (\v -> { form | color = v }))
+        , advanced form
+        ]
+
+
+{-| The folded "Advanced" section: chart title, size and mark options. -}
+advanced : Form -> Html String
+advanced form =
+    node "details"
+        [ class "wiz-advanced" ]
+        [ node "summary" [ class "wiz-summary" ] [ text "Advanced" ]
+        , field "Title"
+            (textField "Chart title" form.title (\v -> { form | title = v }))
+        , field "Size (width × height)"
+            (twin
+                (textField "width" form.width (\v -> { form | width = v }))
+                (textField "height" form.height (\v -> { form | height = v }))
+            )
+        , field "Mark options"
+            (twin
+                (checkboxField "Tooltip" form.tooltip (\b -> { form | tooltip = b }))
+                (checkboxField "Point markers" form.point (\b -> { form | point = b }))
+            )
+        , field "Opacity (0–1)"
+            (textField "1" form.opacity (\v -> { form | opacity = v }))
+        , field "Interpolate (line/area)"
+            (picker Wizard.interpolateChoices form.interpolate (\v -> { form | interpolate = v }))
+        , field "Inner radius (donut)"
+            (textField "0" form.innerRadius (\v -> { form | innerRadius = v }))
         ]
 
 
@@ -69,7 +98,7 @@ twin a b =
 {-| A `<select>` whose choice rebuilds the form (via `toForm`) and emits the regenerated source. -}
 picker : List String -> String -> (String -> Form) -> Html String
 picker choices current toForm =
-    select [ class "wiz-input", onPick toForm ]
+    select [ class "wiz-input", onEdit toForm ]
         (List.map
             (\c ->
                 option [ value c, selected (c == current) ]
@@ -86,9 +115,31 @@ picker choices current toForm =
         )
 
 
-onPick : (String -> Form) -> Html.Attribute String
-onPick toForm =
+textField : String -> String -> (String -> Form) -> Html String
+textField hint current toForm =
+    input [ class "wiz-input", placeholder hint, value current, onEdit toForm ] []
+
+
+checkboxField : String -> Bool -> (Bool -> Form) -> Html String
+checkboxField labelText current toForm =
+    label [ class "wiz-check" ]
+        [ input [ type_ "checkbox", checked current, onCheck toForm ] []
+        , text (" " ++ labelText)
+        ]
+
+
+{-| Emit the regenerated source from a control's new string value, on change (blur). -}
+onEdit : (String -> Form) -> Html.Attribute String
+onEdit toForm =
     on "change"
         (Decode.map (\v -> Wizard.generate (toForm v))
             (Decode.at [ "target", "value" ] Decode.string)
+        )
+
+
+onCheck : (Bool -> Form) -> Html.Attribute String
+onCheck toForm =
+    on "change"
+        (Decode.map (\b -> Wizard.generate (toForm b))
+            (Decode.at [ "target", "checked" ] Decode.bool)
         )

@@ -1,9 +1,10 @@
-module Wizard exposing (Form, default, headers, generate, parse, markChoices, typeChoices)
+module Wizard exposing (Form, default, headers, generate, parse, markChoices, typeChoices, interpolateChoices)
 
 {-| The chart wizard: a structured, two-way view of a Vega-Lite program. `generate` turns a chart
-type + a small CSV dataset + a field mapping into an Elm program written against the `VegaLite`
-module; `parse` reads such a program back into the form (best-effort, so switching the editor's
-Code ⇄ Wizard panes reflects the current source). Pure helpers — the panel UI lives in `WizardPanel`.
+type + a small CSV dataset + a field mapping (and the optional "advanced" properties — title, size and
+mark options) into an Elm program written against the `VegaLite` module; `parse` reads such a program
+back into the form (best-effort, so switching the editor's Code ⇄ Wizard panes reflects the current
+source). Pure helpers — the panel UI lives in `WizardPanel`.
 -}
 
 
@@ -15,6 +16,16 @@ type alias Form =
     , yField : String
     , yType : String
     , color : String
+
+    -- "advanced" (the folded section): chart frame + mark options
+    , title : String
+    , width : String
+    , height : String
+    , tooltip : Bool
+    , point : Bool
+    , opacity : String
+    , interpolate : String
+    , innerRadius : String
     }
 
 
@@ -27,6 +38,14 @@ default =
     , yField = "amount"
     , yType = "quantitative"
     , color = "category"
+    , title = "My chart"
+    , width = "420"
+    , height = "300"
+    , tooltip = True
+    , point = False
+    , opacity = ""
+    , interpolate = ""
+    , innerRadius = ""
     }
 
 
@@ -38,6 +57,11 @@ markChoices =
 typeChoices : List String
 typeChoices =
     [ "quantitative", "nominal", "ordinal", "temporal" ]
+
+
+interpolateChoices : List String
+interpolateChoices =
+    [ "", "linear", "monotone", "basis", "cardinal", "step" ]
 
 
 
@@ -101,17 +125,94 @@ generate form =
         , "main : Spec"
         , "main ="
         , "    toVegaLite"
-        , "        [ title \"My chart\""
-        , "        , width 420"
-        , "        , height 300"
-        , "        , dataFromColumns"
-        , dataBlock form.csv
-        , "        , mark " ++ form.mark ++ " [ maTooltip True ]"
-        , "        , encoding"
-        , encodingBlock form
-        , "        ]"
+        , properties form
         , ""
         ]
+
+
+{-| The `toVegaLite [ … ]` property list (each property prefixed `[ ` / `, ` and closed with `]`). -}
+properties : Form -> String
+properties form =
+    let
+        blocks =
+            (if String.trim form.title == "" then
+                []
+
+             else
+                [ "title " ++ quote (String.trim form.title) ]
+            )
+                ++ [ "width " ++ numOr "400" form.width
+                   , "height " ++ numOr "300" form.height
+                   , "dataFromColumns\n" ++ dataBlock form.csv
+                   , "mark " ++ form.mark ++ " " ++ markProps form
+                   , "encoding\n" ++ encodingBlock form
+                   ]
+    in
+    String.join "\n"
+        (List.indexedMap
+            (\i b ->
+                (if i == 0 then
+                    "        [ "
+
+                 else
+                    "        , "
+                )
+                    ++ b
+            )
+            blocks
+            ++ [ "        ]" ]
+        )
+
+
+numOr : String -> String -> String
+numOr fallback s =
+    if String.trim s == "" then
+        fallback
+
+    else
+        String.trim s
+
+
+{-| The mark's property list, e.g. `[ maTooltip True, maPoint True ]` (or `[]`). -}
+markProps : Form -> String
+markProps form =
+    let
+        ps =
+            (if form.tooltip then
+                [ "maTooltip True" ]
+
+             else
+                []
+            )
+                ++ (if form.point then
+                        [ "maPoint True" ]
+
+                    else
+                        []
+                   )
+                ++ optNum "maOpacity" form.opacity
+                ++ (if String.trim form.interpolate == "" then
+                        []
+
+                    else
+                        [ "maInterpolate " ++ quote (String.trim form.interpolate) ]
+                   )
+                ++ optNum "maInnerRadius" form.innerRadius
+    in
+    if List.isEmpty ps then
+        "[]"
+
+    else
+        "[ " ++ String.join ", " ps ++ " ]"
+
+
+optNum : String -> String -> List String
+optNum fn s =
+    if String.trim s == "" then
+        []
+
+    else
+        [ fn ++ " " ++ String.trim s ]
 
 
 dataBlock : String -> String
@@ -174,34 +275,43 @@ parse : String -> Form
 parse source =
     let
         lines =
-            String.lines source
+            List.map (stripListPrefix << String.trim) (String.lines source)
 
-        trimmed =
-            List.map (stripComma << String.trim) lines
+        markLine =
+            lines |> List.filter (String.startsWith "mark ") |> List.head |> Maybe.withDefault ""
 
         ( colorField, _ ) =
-            parseChannel "pColor" trimmed |> Maybe.withDefault ( "", "" )
+            parseChannel "pColor" lines |> Maybe.withDefault ( "", "" )
 
         ( xField, xType ) =
-            parseChannel "pX" trimmed |> Maybe.withDefault ( default.xField, default.xType )
+            parseChannel "pX" lines |> Maybe.withDefault ( default.xField, default.xType )
 
         ( yField, yType ) =
-            parseChannel "pY" trimmed |> Maybe.withDefault ( default.yField, default.yType )
+            parseChannel "pY" lines |> Maybe.withDefault ( default.yField, default.yType )
     in
-    { mark = parseMark trimmed |> Maybe.withDefault default.mark
-    , csv = parseCsv lines |> Maybe.withDefault default.csv
+    { mark = parseMark lines |> Maybe.withDefault default.mark
+    , csv = parseCsv (String.lines source) |> Maybe.withDefault default.csv
     , xField = xField
     , xType = xType
     , yField = yField
     , yType = yType
     , color = colorField
+    , title = quotedAfter "title" lines |> Maybe.withDefault ""
+    , width = wordAfter "width" lines |> Maybe.withDefault default.width
+    , height = wordAfter "height" lines |> Maybe.withDefault default.height
+    , tooltip = String.contains "maTooltip True" markLine
+    , point = String.contains "maPoint True" markLine
+    , opacity = numAfter "maOpacity" markLine |> Maybe.withDefault ""
+    , interpolate = strAfter "maInterpolate" markLine |> Maybe.withDefault ""
+    , innerRadius = numAfter "maInnerRadius" markLine |> Maybe.withDefault ""
     }
 
 
-{-| Drop a leading list comma (`", "`) so `, mark bar` and `mark bar` parse alike. -}
-stripComma : String -> String
-stripComma s =
-    if String.startsWith ", " s then
+{-| Drop a leading list prefix (`"[ "` on the first item, `", "` on the rest) so every property line
+parses the same way. -}
+stripListPrefix : String -> String
+stripListPrefix s =
+    if String.startsWith ", " s || String.startsWith "[ " s then
         String.dropLeft 2 s
 
     else
@@ -238,7 +348,7 @@ parseChannel prefix lines =
         |> List.head
 
 
-{-| The first word inside the `[ … ]` of a line (the field type / first mark prop). -}
+{-| The first word inside the `[ … ]` of a line (the field type). -}
 bracketWord : String -> Maybe String
 bracketWord s =
     s
@@ -246,6 +356,73 @@ bracketWord s =
         |> nth 1
         |> Maybe.andThen (String.split "]" >> List.head)
         |> Maybe.andThen (String.trim >> String.words >> List.head)
+
+
+{-| The quoted string of a `<token> "…"` line (e.g. `title "Sales"`). -}
+quotedAfter : String -> List String -> Maybe String
+quotedAfter token lines =
+    lines
+        |> List.filterMap
+            (\s ->
+                if String.startsWith (token ++ " \"") s then
+                    nth 1 (String.split "\"" s)
+
+                else
+                    Nothing
+            )
+        |> List.head
+
+
+{-| The bare word of a `<token> <word>` line (e.g. `width 420`). -}
+wordAfter : String -> List String -> Maybe String
+wordAfter token lines =
+    lines
+        |> List.filterMap
+            (\s ->
+                if String.startsWith (token ++ " ") s then
+                    nth 1 (String.words s)
+
+                else
+                    Nothing
+            )
+        |> List.head
+
+
+{-| The numeric value following `<token> ` somewhere in a line (e.g. `maOpacity 0.6` → "0.6"). -}
+numAfter : String -> String -> Maybe String
+numAfter token line =
+    if String.contains (token ++ " ") line then
+        String.split (token ++ " ") line
+            |> nth 1
+            |> Maybe.map (takeUntil [ ' ', ',', ']' ])
+            |> Maybe.andThen nonEmpty
+
+    else
+        Nothing
+
+
+{-| The quoted value following `<token> ` (e.g. `maInterpolate "monotone"` → "monotone"). -}
+strAfter : String -> String -> Maybe String
+strAfter token line =
+    if String.contains (token ++ " ") line then
+        String.split (token ++ " ") line |> nth 1 |> Maybe.andThen (\s -> nth 1 (String.split "\"" s))
+
+    else
+        Nothing
+
+
+takeUntil : List Char -> String -> String
+takeUntil delims s =
+    String.fromList (takeWhile (\c -> not (List.member c delims)) (String.toList s))
+
+
+nonEmpty : String -> Maybe String
+nonEmpty s =
+    if s == "" then
+        Nothing
+
+    else
+        Just s
 
 
 {-| Rebuild the CSV from a `dataFromColumns [ ( "c", strings/numbers [ … ] ) … ]` block. -}

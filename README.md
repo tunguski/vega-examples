@@ -25,7 +25,8 @@ It is built on the [elm-lang](https://github.com/tunguski/elm-lang) ecosystem:
   with the icons, like the bs-theme-builder's form panel). The wizard is a structured, two-way view
   of the *same* file: pick a chart type, edit the CSV, map columns to x / y / colour, and the Elm
   source regenerates; switch to Code and it round-trips back into the form (`Wizard.parse` ⇄
-  `Wizard.generate`).
+  `Wizard.generate`). A folded **Advanced** section adds the chart title, size and mark options
+  (tooltip, point markers, opacity, interpolation, donut inner-radius).
 
 ## The `VegaLite` module
 
