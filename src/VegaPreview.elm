@@ -12,7 +12,7 @@ editor, so this module is purely the result view.
 -}
 
 import Eval
-import EvalJson
+import Eval.Json
 import Html exposing (Html, div)
 import Html.Attributes exposing (id)
 import Html.Lazy
@@ -53,7 +53,7 @@ render : Context -> Model -> ( Model, Cmd Msg )
 render ctx model =
     case Eval.mainValue (evalFiles ctx) of
         Ok value ->
-            ( { model | error = Nothing }, renderSpec (EvalJson.jsonEncode value) )
+            ( { model | error = Nothing }, renderSpec (Eval.Json.jsonEncode value) )
 
         Err e ->
             ( { model | error = Just e }, Cmd.none )

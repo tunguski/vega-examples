@@ -16,16 +16,17 @@ ELM="${ELM:-elm}"
 EDITOR="${EDITOR:-../elm-editor}"
 OUT="build"
 
-# 1) Vendor from elm-editor: the interpreter engine, plus the editor shell (Editor/Preview/Share) and
-#    Elm code intelligence (Highlight/Assist) the app reuses via Editor.program — not its Main.
-mkdir -p vendor
-for m in Lang Lexer Parser EvalJson EvalPlayground EvalRender Eval Highlight CodeEditor Assist Share Preview Editor; do
-  if [ ! -f "$EDITOR/src/$m.elm" ]; then
-    echo "build.sh: missing $EDITOR/src/$m.elm — set EDITOR to the elm-editor checkout" >&2
-    exit 1
-  fi
-  cp "$EDITOR/src/$m.elm" "vendor/$m.elm"
-done
+# 1) Vendor the whole elm-editor source tree (the interpreter engine — Eval + its Eval/* submodules —
+#    plus the shell: Editor/Preview/CodeEditor/Highlight/Assist/Share). Copying the tree keeps us
+#    robust to elm-editor's module renames. We drop only its own `Main` (collides with ours) and
+#    `ElmPreview` (the elm-lang result pane we replace with VegaPreview).
+if [ ! -f "$EDITOR/src/Editor.elm" ]; then
+  echo "build.sh: $EDITOR/src/Editor.elm not found — set EDITOR to the elm-editor checkout" >&2
+  exit 1
+fi
+rm -rf vendor && mkdir -p vendor
+cp -r "$EDITOR/src/." vendor/
+rm -f vendor/Main.elm vendor/ElmPreview.elm
 
 # 2) Compile the app (the editor interpreter doesn't pass our strict type checker, so --no-check).
 mkdir -p "$OUT"
