@@ -28,10 +28,10 @@ rm -rf vendor && mkdir -p vendor
 cp -r "$EDITOR/src/." vendor/
 rm -f vendor/Main.elm vendor/ElmPreview.elm
 
-# 2) Compile the app (the editor interpreter doesn't pass our strict type checker, so --no-check).
+# 2) Compile the app (it now type-checks cleanly, like the other elm-lang example apps).
 mkdir -p "$OUT"
 echo "Compiling the editor app with: $ELM"
-$ELM make src/Main.elm --project=elm.json -o "$OUT/app.js" --no-check >/dev/null
+$ELM make src/Main.elm --project=elm.json -o "$OUT/app.js" >/dev/null
 
 # 3) The VegaLite library source is fetched by the app at runtime and fed to the interpreter.
 cp src/VegaLite.elm "$OUT/VegaLite.elm"
