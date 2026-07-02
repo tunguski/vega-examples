@@ -2,10 +2,11 @@
 #
 # build.sh — build the Elm · Vega-Lite editor.
 #
-# The app reuses the elm-lang in-browser interpreter (the elm-editor project). Since Elm has no
-# cross-project imports, we copy the interpreter modules we need into vendor/ (a source-directory
-# listed in elm.json) before compiling. Set EDITOR to the elm-editor checkout (default ../elm-editor)
-# and ELM to the elm-lang CLI (default `elm`).
+# The app reuses the elm-lang in-browser interpreter (the whole elm-editor source tree — the Eval
+# engine plus the shell). It is a source dependency declared in elm.vendored.json (the compiler pulls
+# every module except its `Main` — collides with ours — and `ElmPreview` — replaced by VegaPreview,
+# via the manifest's `exclude`), resolved at build time into git-deps/ or from the local checkout in
+# elm.vendored.local.json. Set ELM to the elm-lang CLI (default `elm`).
 #
 #   ELM=../../elm.sh ./build.sh
 #
@@ -13,22 +14,9 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 ELM="${ELM:-elm}"
-EDITOR="${EDITOR:-../elm-editor}"
 OUT="build"
 
-# 1) Vendor the whole elm-editor source tree (the interpreter engine — Eval + its Eval/* submodules —
-#    plus the shell: Editor/Preview/CodeEditor/Highlight/Assist/Share). Copying the tree keeps us
-#    robust to elm-editor's module renames. We drop only its own `Main` (collides with ours) and
-#    `ElmPreview` (the elm-lang result pane we replace with VegaPreview).
-if [ ! -f "$EDITOR/src/Editor.elm" ]; then
-  echo "build.sh: $EDITOR/src/Editor.elm not found — set EDITOR to the elm-editor checkout" >&2
-  exit 1
-fi
-rm -rf vendor && mkdir -p vendor
-cp -r "$EDITOR/src/." vendor/
-rm -f vendor/Main.elm vendor/ElmPreview.elm
-
-# 2) Compile the app (it now type-checks cleanly, like the other elm-lang example apps).
+# Compile the app (it type-checks cleanly, like the other elm-lang example apps).
 mkdir -p "$OUT"
 echo "Compiling the editor app with: $ELM"
 $ELM make src/Main.elm --project=elm.json -o "$OUT/app.js" >/dev/null

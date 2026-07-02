@@ -35,11 +35,8 @@ jobs:
           repository: tunguski/elm-lang
           path: .toolchain/elm-lang
 
-      - name: Check out elm-editor (the interpreter the app embeds)
-        uses: actions/checkout@v4
-        with:
-          repository: tunguski/elm-editor
-          path: .toolchain/elm-editor
+      # elm-editor (the interpreter the app embeds) is a source dependency declared in
+      # elm.vendored.json and cloned by the compiler at build time — no separate checkout needed.
 
       - name: Set up GraalVM for JDK 25
         uses: graalvm/setup-graalvm@v1
@@ -58,7 +55,6 @@ jobs:
         run: |
           chmod +x ./build.sh
           ELM="java -jar $GITHUB_WORKSPACE/.toolchain/elm-lang/target/elm.jar" \
-            EDITOR="$GITHUB_WORKSPACE/.toolchain/elm-editor" \
             ./build.sh
 
       # Stamp the short commit hash + UTC build time into a tiny fixed-position badge, so anyone can
