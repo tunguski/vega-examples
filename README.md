@@ -55,12 +55,14 @@ main =
 
 ## Build & run
 
-You need the [elm-lang](https://github.com/tunguski/elm-lang) CLI and a checkout of
-[elm-editor](https://github.com/tunguski/elm-editor) next to this project (the build copies the
-interpreter modules from it, since Elm has no cross-project imports).
+You need the [elm-lang](https://github.com/tunguski/elm-lang) CLI. The interpreter modules from
+[elm-editor](https://github.com/tunguski/elm-editor) are declared as a source dependency in
+[`elm.vendored.json`](elm.vendored.json): the compiler pulls the whole tree (every module except its
+own `Main` — collides with ours — and `ElmPreview` — replaced by `VegaPreview`), resolved into
+`git-deps/` from the git ref, or from a local checkout named in `elm.vendored.local.json`.
 
 ```sh
-# from this directory; ELM points at the elm-lang CLI, EDITOR at the elm-editor checkout
+# from this directory; ELM points at the elm-lang CLI, EDITOR at the elm-editor checkout (for its CSS)
 ELM=../../elm.sh EDITOR=../elm-editor ./build.sh
 npx --yes serve build      # then open the printed URL
 ```
@@ -70,10 +72,12 @@ npx --yes serve build      # then open the printed URL
 $env:ELM = 'java -jar C:\path\to\elm.jar'; $env:EDITOR = '..\elm-editor'; ./build.ps1
 ```
 
-`build.sh` copies the interpreter modules into `vendor/`, compiles `src/Main.elm` with the elm-lang
-JS backend (`--no-check`, as the interpreter leans on idioms the strict checker doesn't fully
-analyse), copies `VegaLite.elm` (the app fetches it at runtime to feed the interpreter), and writes
-`build/index.html` (vega + vega-embed from a CDN, the app, and the port wiring).
+`build.sh` compiles `src/Main.elm` with the elm-lang JS backend (the app type-checks cleanly under
+the strict checker, like the other elm-lang example apps — no `--no-check`), copies `VegaLite.elm`
+(the app fetches it at runtime to feed the interpreter) and the editor shell's `editor.css` from
+`$EDITOR`, and writes `build/index.html` (vega + vega-embed from a CDN, the app, and the port
+wiring). (`build.ps1` still vendors the elm-editor source tree into `vendor/` and passes
+`--no-check`.)
 
 ## Layout
 
@@ -85,7 +89,7 @@ analyse), copies `VegaLite.elm` (the app fetches it at runtime to feed the inter
 | [src/Wizard.elm](src/Wizard.elm) | The wizard's pure core: `parse` (source → form) and `generate` (form → source), plus CSV handling. |
 | [src/VegaLite.elm](src/VegaLite.elm) | The Vega-Lite library (fetched at runtime and fed to the interpreter). |
 | [src/Examples.elm](src/Examples.elm) | The built-in example programs (the shell's initial files). |
-| `vendor/` | elm-editor modules (interpreter engine + the `Editor` shell) copied at build time (git-ignored). |
+| `elm.vendored.json` | Declares the elm-editor source dependency (interpreter engine + the `Editor` shell); the compiler resolves it into `git-deps/` (or `vendor/` via `build.ps1`), all git-ignored. |
 | [legacy/](legacy/) | The original ten **full-grammar** `gicentre/elm-vega` examples + their static-gallery build scripts. |
 
 ## How it renders without an Elm/DOM clash
