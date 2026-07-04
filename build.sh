@@ -25,7 +25,14 @@ $ELM make src/Main.elm --project=elm.json -o "$OUT/app.js" >/dev/null
 cp src/VegaLite.elm "$OUT/VegaLite.elm"
 
 # 4) The editor shell's stylesheet (the .ed-* IDE chrome the host page layers its preview styles on).
-cp "$EDITOR/editor.css" "$OUT/editor.css"
+#    It ships at the elm-editor repo root — the manifest gathers only .elm sources — so copy it from
+#    the checkout the compiler used: the local override (elm.vendored.local.json) if present, else git-deps/.
+ED="git-deps/elm-editor"
+if [ -f elm.vendored.local.json ]; then
+  L=$(sed -n 's/.*"elm-editor"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' elm.vendored.local.json)
+  [ -n "$L" ] && [ -d "$L" ] && ED="$L"
+fi
+cp "$ED/editor.css" "$OUT/editor.css"
 
 # 5) The host page (CDN vega + vega-embed, editor shell CSS + overlay, the compiled app, the ports).
 cp index.template.html "$OUT/index.html"
